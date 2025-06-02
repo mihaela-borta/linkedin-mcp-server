@@ -10,8 +10,7 @@ from mcp.server.fastmcp import FastMCP
 
 from linkedin_mcp_server.drivers.chrome import active_drivers
 from linkedin_mcp_server.tools.person import register_person_tools
-from linkedin_mcp_server.tools.company import register_company_tools
-from linkedin_mcp_server.tools.job import register_job_tools
+from linkedin_mcp_server.tools.storage import register_storage_tools
 
 
 def create_mcp_server() -> FastMCP:
@@ -20,8 +19,7 @@ def create_mcp_server() -> FastMCP:
 
     # Register all tools
     register_person_tools(mcp)
-    register_company_tools(mcp)
-    register_job_tools(mcp)
+    register_storage_tools(mcp)
 
     # Register session management tool
     @mcp.tool()

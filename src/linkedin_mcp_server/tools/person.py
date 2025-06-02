@@ -10,6 +10,7 @@ from mcp.server.fastmcp import FastMCP
 from linkedin_scraper import Person
 
 from linkedin_mcp_server.drivers.chrome import get_or_create_driver
+from linkedin_mcp_server.tools.storage import save_profile
 
 
 def register_person_tools(mcp: FastMCP) -> None:
@@ -23,15 +24,17 @@ def register_person_tools(mcp: FastMCP) -> None:
     @mcp.tool()
     async def get_person_profile(linkedin_url: str) -> Dict[str, Any]:
         """
-        Scrape a person's LinkedIn profile.
+        Scrape a person's LinkedIn profile and save it automatically.
 
         Args:
             linkedin_url (str): The LinkedIn URL of the person's profile
 
         Returns:
-            Dict[str, Any]: Structured data from the person's profile
+            Dict[str, Any]: Structured data from the person's profile and save status
         """
+        print("🔍 Creating driver")
         driver = get_or_create_driver()
+        print("🔍 Driver created. Exiting...")
 
         try:
             print(f"🔍 Scraping profile: {linkedin_url}")
@@ -63,38 +66,23 @@ def register_person_tools(mcp: FastMCP) -> None:
                 for edu in person.educations
             ]
 
-            # Convert interests to list of titles
-            interests: List[str] = [interest.title for interest in person.interests]
-
-            # Convert accomplishments to structured dictionaries
-            accomplishments: List[Dict[str, str]] = [
-                {"category": acc.category, "title": acc.title}
-                for acc in person.accomplishments
-            ]
-
-            # Convert contacts to structured dictionaries
-            contacts: List[Dict[str, str]] = [
-                {
-                    "name": contact.name,
-                    "occupation": contact.occupation,
-                    "url": contact.url,
-                }
-                for contact in person.contacts
-            ]
-
-            # Return the complete profile data
-            return {
+            # Build the complete profile data
+            profile_data = {
                 "name": person.name,
+                "linkedin_url": linkedin_url,  # Add the URL for reference
+                "company": person.company,
+                "job_title": person.job_title,
                 "about": person.about,
                 "experiences": experiences,
                 "educations": educations,
-                "interests": interests,
-                "accomplishments": accomplishments,
-                "contacts": contacts,
-                "company": person.company,
-                "job_title": person.job_title,
-                "open_to_work": getattr(person, "open_to_work", False),
             }
+
+            # Save the profile automatically
+            save_result = await save_profile(profile_data)
+
+            # Return both profile data and save status
+            return {"profile": profile_data, "save_status": save_result}
+
         except Exception as e:
             print(f"❌ Error scraping profile: {e}")
             return {"error": f"Failed to scrape profile: {str(e)}"}

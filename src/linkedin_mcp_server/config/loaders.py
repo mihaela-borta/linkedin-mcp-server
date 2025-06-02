@@ -69,13 +69,13 @@ def load_from_args(config: AppConfig) -> AppConfig:
     parser.add_argument(
         "--no-setup",
         action="store_true",
-        help="Skip printing configuration information and interactive setup",
+        help="Skip configuration setup prompts",
     )
 
     parser.add_argument(
         "--no-lazy-init",
         action="store_true",
-        help="Initialize Chrome driver and login immediately",
+        help="Initialize Chrome driver immediately (instead of on first use)",
     )
 
     parser.add_argument(
@@ -89,6 +89,12 @@ def load_from_args(config: AppConfig) -> AppConfig:
         "--chromedriver",
         type=str,
         help="Specify the path to the ChromeDriver executable",
+    )
+
+    parser.add_argument(
+        "--chrome-args",
+        type=str,
+        help="Specify Chrome browser arguments",
     )
 
     args = parser.parse_args()
@@ -111,6 +117,9 @@ def load_from_args(config: AppConfig) -> AppConfig:
 
     if args.chromedriver:
         config.chrome.chromedriver_path = args.chromedriver
+
+    if args.chrome_args:
+        config.chrome.browser_args.append(args.chrome_args)
 
     return config
 
