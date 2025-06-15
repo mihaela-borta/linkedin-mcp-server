@@ -3,12 +3,17 @@ import csv
 import time
 import os
 import logging
+import argparse
 from typing import List, Dict
 from mcp_use import MCPClient
 import subprocess
 
 # Set up logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s.%(msecs)03d %(levelname)s: %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
 logger = logging.getLogger("linkedin_scraper")
 
 
@@ -29,7 +34,7 @@ cleanup_chrome()
 
 
 class LinkedInProfileSearcher:
-    """Handles searching for LinkedIn profiles using DuckDuckGo"""
+    """Handles searching for potential LinkedIn profiles using DuckDuckGo"""
 
     def __init__(self, delay_seconds: int = 30):
         self.delay = delay_seconds
@@ -47,137 +52,86 @@ class LinkedInProfileSearcher:
     def _load_search_terms(self, csv_path: str) -> List[Dict]:
         """Load search terms from CSV file"""
         with open(csv_path, "r") as f:
-            reader = csv.DictReader(
-                f, delimiter=";"
-            )  # Note: using semicolon as delimiter
+            reader = csv.DictReader(f, delimiter=";")
             return list(reader)
 
-    async def search_profile(
-        self, name: str, organization: str, title: str
-    ) -> str | None:
-        """Search for a LinkedIn profile using DuckDuckGo"""
+    async def gather_linkedin_info(
+        self, input_csv: str, output_csv: str = "data/ddg_results.csv"
+    ) -> None:
+        """Gather potential LinkedIn profile information using DuckDuckGo search"""
         try:
-            # Create DuckDuckGo session
-            ddg_session = await self.client.create_session("ddg-search")
+            profiles = self._load_search_terms(input_csv)
 
-            # Construct search query
-            query = f"{name} {organization} {title} LinkedIn profile"
-            self.logger.info(f"Searching for: {query}")
+            os.makedirs(os.path.dirname(output_csv), exist_ok=True)
 
-            # Search for profile
-            response = await ddg_session.connector.call_tool(
-                "search", {"query": query, "max_results": 10}
-            )
+            with open(output_csv, "w", newline="") as f:
+                writer = csv.writer(f, delimiter=";")
+                writer.writerow(
+                    ["organization", "job_title", "name", "event", "ddg_search"]
+                )
 
-            self.logger.info(f"Results: {response}")
+                for profile in profiles:
+                    try:
+                        self.logger.info(
+                            f"Searching for LinkedIn info: {profile['name']} at {profile['organization']}"
+                        )
 
-            if response and hasattr(response, "content"):
-                # The response is a text content with URLs
-                text_content = response.content[0].text
+                        ddg_session = await self.client.create_session("ddg-search")
+                        query = f"{profile['name']} {profile['organization']} {profile['job_title']} LinkedIn profile"
 
-                # Get organization name parts to filter out
-                org_lower = organization.lower()
-                org_prefix = org_lower[:4] if len(org_lower) >= 4 else org_lower
+                        response = await ddg_session.connector.call_tool(
+                            "search", {"query": query, "max_results": 10}
+                        )
 
-                # First try to find a LinkedIn profile URL
-                if "/in/" in text_content:
-                    # Find all occurrences of LinkedIn profile URLs
-                    start = 0
-                    while True:
-                        start = text_content.find("https://www.linkedin.com/in/", start)
-                        if start == -1:
-                            break
-
-                        # Find the end of the URL
-                        end = text_content.find(" ", start)
-                        if end == -1:
-                            end = text_content.find("\n", start)
-                        if end == -1:
-                            end = len(text_content)
-
-                        profile_url = text_content[start:end].strip()
-
-                        # Check if this is a company profile
-                        if (
-                            org_lower not in profile_url.lower()
-                            and org_prefix not in profile_url.lower()
-                        ):
-                            self.logger.info(f"Found LinkedIn profile: {profile_url}")
-                            return profile_url
-
-                        start = end  # Move past this URL to find the next one
-
-                # If no profile URL found, try to find a post URL and extract profile
-                if "/posts/" in text_content:
-                    start = text_content.find("https://www.linkedin.com/posts/")
-                    if start != -1:
-                        end = text_content.find("_", start)
-                        if end != -1:
-                            # Extract the profile part from the post URL
-                            profile_url = text_content[start:end].replace(
-                                "/posts/", "/in/"
+                        if response and hasattr(response, "content"):
+                            writer.writerow(
+                                [
+                                    profile["organization"],
+                                    profile["job_title"],
+                                    profile["name"],
+                                    profile.get("event", ""),
+                                    response.content[0].text
+                                    if response.content
+                                    else "",
+                                ]
                             )
                             self.logger.info(
-                                f"Found LinkedIn profile from post: {profile_url}"
+                                f"Found potential LinkedIn info for {profile['name']}"
                             )
-                            return profile_url
+                        else:
+                            self.logger.warning(
+                                f"No LinkedIn info found for {profile['name']}"
+                            )
+                            writer.writerow(
+                                [
+                                    profile["organization"],
+                                    profile["job_title"],
+                                    profile["name"],
+                                    profile.get("event", ""),
+                                    "",
+                                ]
+                            )
 
-            return None
+                        await asyncio.sleep(self.delay)
+
+                    except Exception as e:
+                        self.logger.error(f"Error processing {profile['name']}: {e}")
+                        continue
+                    finally:
+                        if hasattr(ddg_session, "close"):
+                            await ddg_session.close()
 
         except Exception as e:
-            self.logger.error(f"Error searching for profile: {e}")
-            return None
-        finally:
-            if hasattr(ddg_session, "close"):
-                await ddg_session.close()
-
-    async def search_and_save_profiles(
-        self, input_csv: str, output_csv: str = "data/profiles.csv"
-    ):
-        """Search for profiles and save URLs to CSV"""
-        self.logger.info("Starting profile search...")
-
-        # Load search terms
-        profiles = self._load_search_terms(input_csv)
-
-        # Create output directory if it doesn't exist
-        os.makedirs(os.path.dirname(output_csv), exist_ok=True)
-
-        # Open output CSV file
-        with open(output_csv, "w", newline="") as f:
-            writer = csv.writer(f)
-            writer.writerow(["name", "url"])  # Write header
-
-            for profile in profiles:
-                try:
-                    self.logger.info(f"Searching for profile: {profile['name']}")
-                    linkedin_url = await self.search_profile(
-                        profile["name"], profile["organization"], profile["title"]
-                    )
-
-                    if linkedin_url:
-                        writer.writerow([profile["name"], linkedin_url])
-                        self.logger.info(
-                            f"Found profile for {profile['name']}: {linkedin_url}"
-                        )
-                    else:
-                        self.logger.warning(f"No profile found for {profile['name']}")
-
-                    # Wait between searches to avoid rate limiting
-                    await asyncio.sleep(self.delay)
-
-                except Exception as e:
-                    self.logger.error(f"Error processing {profile['name']}: {e}")
-                    continue
+            self.logger.error(f"Error in gather_linkedin_info: {e}")
 
 
 class LinkedInScraper:
     """Handles scraping LinkedIn profiles"""
 
     def __init__(self, csv_path: str, delay_seconds: int = 180):
-        self.profiles = self._load_profiles(csv_path)
         self.delay = delay_seconds
         self.logger = logging.getLogger("linkedin_scraper")
+        self.profiles = self._load_profiles(csv_path)
 
         # Initialize LinkedIn MCP client
         config = {
@@ -202,10 +156,20 @@ class LinkedInScraper:
         self.logger.info("LinkedIn MCP client initialized")
 
     def _load_profiles(self, csv_path: str) -> List[Dict]:
-        """Load profiles from CSV file"""
+        """Load profiles from CSV file with unified column names"""
         with open(csv_path, "r") as f:
-            reader = csv.DictReader(f)
-            return list(reader)
+            reader = csv.DictReader(f, delimiter=";")
+            profiles = []
+            for row in reader:
+                name = row.get("name") or row.get("Name")
+                url = row.get("url") or row.get("LinkedIn")
+
+                if not name or not url:
+                    self.logger.warning(f"Missing required columns in row: {row}")
+                    continue
+
+                profiles.append({"name": name, "url": url})
+            return profiles
 
     async def scrape_profiles(self):
         """Main scraping loop"""
@@ -270,25 +234,35 @@ class LinkedInScraper:
 
 
 if __name__ == "__main__":
-    print("🔍 LinkedIn Profile Scraper")
-    print("=" * 40)
-    print("Make sure:")
-    print("1. You have the correct LinkedIn credentials in the script")
-    print("2. The data/profiles_search_terms.csv file exists with the required columns")
-    print("=" * 40)
-    print("To run this scraper:")
-    print("1. Open a terminal")
-    print("2. Run: uv run scraper.py")
-    print("=" * 40)
-
-    # First search for profiles
-    searcher = LinkedInProfileSearcher(delay_seconds=30)
-    asyncio.run(
-        searcher.search_and_save_profiles(
-            input_csv="data/profiles_search_terms.csv", output_csv="data/profiles_1.csv"
-        )
+    parser = argparse.ArgumentParser(description="LinkedIn Profile Tools")
+    parser.add_argument(
+        "--mode",
+        choices=["search", "scrape"],
+        required=True,
+        help="Mode: 'search' to find profiles using DuckDuckGo, 'scrape' to scrape found profiles",
     )
+    parser.add_argument(
+        "--input",
+        type=str,
+        required=True,
+        help="Input CSV file (search terms for search mode, profile URLs for scrape mode)",
+    )
+    parser.add_argument(
+        "--output", type=str, help="Output CSV file (search results for search mode)"
+    )
+    parser.add_argument(
+        "--delay",
+        type=int,
+        default=30,
+        help="Delay between requests in seconds (default: 30)",
+    )
+    args = parser.parse_args()
 
-    # Then scrape the found profiles
-    # scraper = LinkedInScraper("data/profiles.csv", delay_seconds=30)
-    # asyncio.run(scraper.scrape_profiles())
+    if args.mode == "search":
+        searcher = LinkedInProfileSearcher(delay_seconds=args.delay)
+        asyncio.run(
+            searcher.gather_linkedin_info(input_csv=args.input, output_csv=args.output)
+        )
+    else:  # scrape mode
+        scraper = LinkedInScraper(args.input, delay_seconds=args.delay)
+        asyncio.run(scraper.scrape_profiles())

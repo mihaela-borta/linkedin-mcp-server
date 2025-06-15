@@ -110,24 +110,25 @@ uv run main.py --no-setup
 
 ### Batch Profile Scraping
 
-The included scraper allows you to process multiple LinkedIn profiles from a CSV file:
+The included scraper has two main functions:
 
-1. Create a CSV file in `data/profiles.csv` with columns:
-   - `name`: Profile name (for logging)
-   - `url`: LinkedIn profile URL
+1. **Search for Profiles**:
+   ```bash
+   make search INPUT=data/search_terms.csv OUTPUT=data/search_results.json
+   ```
+   Takes a CSV file with search terms (name, organization, job title) and uses DuckDuckGo to find potential LinkedIn profiles.
 
-2. Run the scraper:
-```bash
-uv run scraper.py
-```
+2. **Scrape Found Profiles**:
+   ```bash
+   make scrape INPUT=data/profiles.csv
+   ```
+   Takes a CSV file with LinkedIn profile URLs and scrapes each profile, saving the results as individual JSON files.
 
-The scraper will:
-- Process each profile in the CSV
-- Wait between requests to avoid rate limiting
-- Log results and any errors
-- Save profile data as needed
-
-You can adjust the delay between requests by modifying the `delay_seconds` parameter in `scraper.py`.
+The scraper includes:
+- Rate limiting to avoid LinkedIn restrictions
+- Detailed logging of progress and errors
+- Automatic session management
+- Error handling and retry logic
 
 ### Configuration for Claude Desktop
 
@@ -195,3 +196,50 @@ This project is licensed under the MIT License
 ---
 
 **Note**: This tool is for personal use only. Use responsibly and in accordance with LinkedIn's terms of service. Web scraping may violate LinkedIn's terms of service.
+
+## Processing DuckDuckGo Search Results
+
+This section describes how to process the raw DuckDuckGo search results to extract LinkedIn profile information using Claude.
+
+### Prerequisites
+
+- Python 3.8 or higher
+- Anthropic API key (set as environment variable `ANTHROPIC_API_KEY`)
+- Input CSV file with DuckDuckGo search results (format: organization;job_title;name;event;ddg_search)
+
+### Processing Steps
+
+1. **Run the Parser Script**
+   ```bash
+   python parse_ddg.py --input data/ddg_results.csv --output data/parsed_ddg_results.csv
+   ```
+   The script will:
+   - Load the DuckDuckGo search results
+   - Create a batch job with Claude to analyze each result
+   - Save the parsed results to the output CSV file
+
+2. **Get Raw Batch Results (Optional)**
+   If you need the raw API responses for debugging:
+   ```bash
+   curl https://api.anthropic.com/v1/messages/batches/<BATCH_ID>/results \
+     --header "x-api-key: $ANTHROPIC_API_KEY" \
+     --header "anthropic-version: 2023-06-01" \
+     --output parsed_ddg_results.jsonl
+   ```
+   Replace `<BATCH_ID>` with the ID shown in the script's output.
+
+### Output Format
+
+The parsed results CSV contains the following columns:
+- Company: Current employer
+- Title: Job position
+- Name: Full name
+- Email: Professional email address
+- Phone: Primary phone number
+- LinkedIn: Personal profile URL
+- Location: City/region
+- Industry: Business sector
+- Brief_Profile: Brief relevant details (max 100 words)
+- Detailed_Profile: Comprehensive background (200-300 words)
+- Media_Links: URLs to media appearances (pipe-separated)
+- Professional_Links: URLs to professional pages (pipe-separated)

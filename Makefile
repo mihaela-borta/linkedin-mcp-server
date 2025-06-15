@@ -17,11 +17,16 @@ help:
 	@echo "  make setup        - Set up the development environment"
 	@echo "  make test         - Run tests"
 	@echo "  make run          - Run the main server"
-	@echo "  make scrape       - Run the scraper"
+	@echo "  make search       - Search for LinkedIn profiles using DuckDuckGo"
+	@echo "  make scrape       - Scrape found LinkedIn profiles"
 	@echo "  make clean        - Clean up generated files"
 	@echo "  make lint         - Run linting checks"
 	@echo "  make check-env    - Check required environment variables"
 	@echo "  make dev-install  - Install package in development mode"
+	@echo ""
+	@echo "Scraper Usage Examples:"
+	@echo "  make search INPUT=data/search_terms.csv OUTPUT=data/search_results.json"
+	@echo "  make scrape INPUT=data/profiles.csv OUTPUT=data/profiles/"
 
 # Create template .env file
 .PHONY: init-env
@@ -88,11 +93,27 @@ run: check-env
 	@echo "Running LinkedIn MCP server..."
 	PYTHONPATH=$(PYTHONPATH) . $(ENV_FILE) && $(UV) run main.py
 
-# Run the scraper
+# Search for LinkedIn profiles using DuckDuckGo
+.PHONY: search
+search: check-env
+	@echo "Searching for LinkedIn profiles..."
+	@if [ -z "$(INPUT)" ] || [ -z "$(OUTPUT)" ]; then \
+		echo "Error: INPUT and OUTPUT parameters are required"; \
+		echo "Usage: make search INPUT=input.csv OUTPUT=output.csv"; \
+		exit 1; \
+	fi
+	PYTHONPATH=$(PYTHONPATH) . $(ENV_FILE) && $(UV) run scraper.py --mode search --input $(INPUT) --output $(OUTPUT)
+
+# Scrape found LinkedIn profiles
 .PHONY: scrape
 scrape: check-env
-	@echo "Running LinkedIn scraper..."
-	PYTHONPATH=$(PYTHONPATH) . $(ENV_FILE) && $(UV) run scraper.py
+	@echo "Scraping LinkedIn profiles..."
+	@if [ -z "$(INPUT)" ]; then \
+		echo "Error: INPUT parameter is required"; \
+		echo "Usage: make scrape INPUT=input.csv"; \
+		exit 1; \
+	fi
+	PYTHONPATH=$(PYTHONPATH) . $(ENV_FILE) && $(UV) run scraper.py --mode scrape --input $(INPUT)
 
 # Clean up generated files
 .PHONY: clean
