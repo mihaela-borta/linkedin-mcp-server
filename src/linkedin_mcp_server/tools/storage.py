@@ -14,12 +14,29 @@ STORAGE_DIR = os.path.expanduser("~/linkedin_data")
 os.makedirs(STORAGE_DIR, exist_ok=True)
 
 
-async def save_profile(profile_data: Dict[str, Any]) -> Dict[str, Any]:
-    """Save a LinkedIn profile to disk."""
+async def save_profile(
+    profile_data: Dict[str, Any], event_name: str = None
+) -> Dict[str, Any]:
+    """Save a LinkedIn profile to disk. Uses event subdirectory if event_name is provided."""
     try:
-        # Create a filename from the profile name
-        filename = f"{profile_data['name'].lower().replace(' ', '_')}.json"
-        filepath = os.path.join(STORAGE_DIR, filename)
+        # Create a filename from the LinkedIn URL slug (more standard)
+        linkedin_url = profile_data.get('linkedin_url', '')
+        if linkedin_url:
+            # Extract slug from LinkedIn URL: https://linkedin.com/in/username-id -> username-id
+            slug = linkedin_url.rstrip('/').split('/')[-1]
+            filename = f"{slug}.json"
+        else:
+            # Fallback to profile name if no LinkedIn URL
+            filename = f"{profile_data['name'].lower().replace(' ', '_')}.json"
+
+        # Use event directory if event_name is provided, otherwise use general storage
+        if event_name:
+            # Create event-specific directory
+            event_dir = os.path.join(STORAGE_DIR, event_name.lower().replace(" ", "_"))
+            os.makedirs(event_dir, exist_ok=True)
+            filepath = os.path.join(event_dir, filename)
+        else:
+            filepath = os.path.join(STORAGE_DIR, filename)
 
         # Save the profile data
         with open(filepath, "w") as f:
@@ -38,16 +55,16 @@ def register_storage_tools(mcp: FastMCP) -> None:
     """Register storage-related tools with the MCP server."""
 
     @mcp.tool()
-    async def load_profile(profile_name: str) -> Dict[str, Any]:
-        """Load a LinkedIn profile from disk."""
+    async def load_profile(profile_slug: str) -> Dict[str, Any]:
+        """Load a LinkedIn profile from disk using the LinkedIn slug."""
         try:
-            filename = f"{profile_name.lower().replace(' ', '_')}.json"
+            filename = f"{profile_slug}.json"
             filepath = os.path.join(STORAGE_DIR, filename)
 
             if not os.path.exists(filepath):
                 return {
                     "status": "error",
-                    "message": f"Profile not found: {profile_name}",
+                    "message": f"Profile not found: {profile_slug}",
                 }
 
             with open(filepath, "r") as f:
@@ -69,6 +86,7 @@ def register_storage_tools(mcp: FastMCP) -> None:
                         profiles.append(
                             {
                                 "name": profile.get("name", "Unknown"),
+                                "slug": filename.replace(".json", ""),
                                 "filepath": os.path.join(STORAGE_DIR, filename),
                             }
                         )

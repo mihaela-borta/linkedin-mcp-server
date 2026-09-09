@@ -1,4 +1,6 @@
 import re
+import argparse
+import requests
 
 
 def extract_speakers_from_html(html_content):
@@ -141,83 +143,108 @@ def html_to_csv(html_content, output_file="speakers.csv"):
     # Write to CSV file
     with open(output_file, "w", encoding="utf-8") as f:
         # Write header
-        f.write("name;session\n")
+        f.write("name;url\n")
 
         # Write speaker data
-        for name, session_url in speakers:
+        for name, speaker_url in speakers:
             # Escape semicolons in data if present
             name_escaped = name.replace(";", "\\;")
-            session_escaped = session_url.replace(";", "\\;")
-            f.write(f"{name_escaped};{session_escaped}\n")
+            speaker_url_escaped = speaker_url.replace(";", "\\;")
+            f.write(f"{name_escaped};{speaker_url_escaped}\n")
 
     return speakers
 
 
-def html_string_to_csv_string(html_content):
+def download_html_from_url(url):
     """
-    Convert HTML speaker data to CSV string format.
+    Download HTML content from a URL.
+    Returns the HTML content as a string.
     """
-    speakers = extract_speakers_from_html(html_content)
-
-    lines = ["name;session"]
-    for name, session_url in speakers:
-        # Escape semicolons in data if present
-        name_escaped = name.replace(";", "\\;")
-        session_escaped = session_url.replace(";", "\\;")
-        lines.append(f"{name_escaped};{session_escaped}")
-
-    return "\n".join(lines)
+    try:
+        response = requests.get(url, timeout=30)
+        response.raise_for_status()  # Raise an exception for bad status codes
+        return response.text
+    except requests.RequestException as e:
+        print(f"Error downloading from {url}: {e}")
+        return None
 
 
 # Example usage
 if __name__ == "__main__":
     # Sample HTML (you can replace this with your actual HTML content)
-    sample_html = """
-    <div class="site__centered">
-        <div class="speakers__layout">
-            <div class="speakers__item">
-                <a href="https://groundswellag.com/speakers/matthew-adams/" class="speakers__person">
-                    <div class="speakers__photo" style="background-image:url(https://groundswellag.com/wp-content/uploads/2021/05/Matthew-Adams-1-e1747994758923-295x305.jpg)"></div>
-                    <div class="speakers__info">
-                        <div>
-                            <h2 class="speakers__name">Matthew Adams</h2>
-                            <span class="speakers__post">2025</span>
-                            <div class="speakers__icon"></div>
-                        </div>
-                    </div>
-                </a>
-            </div>
-        </div>
-    </div>
-    """
+    # sample_html = """
+    # <div class="site__centered">
+    #     <div class="speakers__layout">
+    #         <div class="speakers__item">
+    #             <a href="https://groundswellag.com/speakers/matthew-adams/" class="speakers__person">
+    #                 <div class="speakers__photo" style="background-image:url(https://groundswellag.com/wp-content/uploads/2021/05/Matthew-Adams-1-e1747994758923-295x305.jpg)"></div>
+    #                 <div class="speakers__info">
+    #                     <div>
+    #                         <h2 class="speakers__name">Matthew Adams</h2>
+    #                         <span class="speakers__post">2025</span>
+    #                         <div class="speakers__icon"></div>
+    #                     </div>
+    #                 </div>
+    #             </a>
+    #         </div>
+    #     </div>
+    # </div>
+    # """
 
-    # Method 1: Save to file
-    speakers = html_to_csv(sample_html, "speakers_output.csv")
-    print(f"Extracted {len(speakers)} speakers to speakers_output.csv")
+    # # Method 1: Test with sample
+    # speakers = html_to_csv(sample_html, "speakers_output.csv")
+    # print(f"Extracted {len(speakers)} speakers to speakers_output.csv")
 
-    # Method 2: Get as string
-    csv_string = html_string_to_csv_string(sample_html)
-    print("\nCSV Output:")
-    print(csv_string)
+    parser = argparse.ArgumentParser(
+        description="Extract speakers from website URL and convert to CSV"
+    )
+    parser.add_argument(
+        "-u",
+        "--url",
+        default="https://groundswellag.com/2025-speakers/",
+        help="URL to fetch speakers from (default: https://groundswellag.com/2025-speakers/)",
+    )
+    parser.add_argument(
+        "-o",
+        "--output",
+        default="data/groundswellag_speaker_webpages.csv",
+        help="Output CSV file path (default: data/groundswellag_speaker_webpages.csv)",
+    )
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Enable debug output to analyze HTML structure",
+    )
 
-    # Method 3: Read from file with debugging
-    try:
-        with open("data/groundswellag-2025-speakers.html", "r", encoding="utf-8") as f:
-            html_content = f.read()
+    args = parser.parse_args()
 
-        print("=== DEBUGGING HTML FILE ===")
+    print(f"Downloading HTML from {args.url}...")
+    html_content = download_html_from_url(args.url)
+
+    if html_content is None:
+        print("Failed to download HTML content. Exiting.")
+        exit(1)
+
+    # Optionally save the downloaded HTML to a file
+    html_filename = "data/groundswellag-2025-speakers.html"
+    with open(html_filename, "w", encoding="utf-8") as f:
+        f.write(html_content)
+    print(f"HTML content saved to {html_filename}")
+
+    if args.debug:
+        print("=== DEBUGGING HTML CONTENT ===")
         debug_html_structure(html_content)
 
-        speakers = html_to_csv(html_content, "data/groundswellag-2025-speakers.csv")
-        print(f"\nProcessed HTML file: {len(speakers)} speakers extracted")
+    speakers = html_to_csv(html_content, args.output)
+    print(
+        f"Processed HTML from {args.url}: {len(speakers)} speakers extracted to {args.output}"
+    )
 
-        if not speakers:
-            print(
-                "\nNo speakers found. The HTML structure might be different than expected."
-            )
-            print("Check the debug output above to see what was found in the file.")
-
-    except FileNotFoundError:
+    if not speakers:
         print(
-            "\nTo process from file, save your HTML as 'groundswellag-2025-speakers.html' in the same directory"
+            "\nNo speakers found. The HTML structure might be different than expected."
         )
+        if args.debug:
+            print("Check the debug output above to see what was found in the content.")
+        else:
+            print("Run with --debug to see what was found in the content.")

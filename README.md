@@ -117,7 +117,11 @@ The included scraper has two main functions:
    make search INPUT=data/search_terms.csv OUTPUT=data/search_results.json
    ```
    Takes a CSV file with search terms (name, organization, job title) and uses DuckDuckGo to find potential LinkedIn profiles.
+   To manually download the results:
 
+   ```bash
+   curl https://api.anthropic.com/v1/messages/batches/msgbatch_<id>/results  --header "x-api-key: $ANTHROPIC_API_KEY"      --header "anthropic-version: 2023-06-01" >> data/search_results.json
+   ```
 2. **Scrape Found Profiles**:
    ```bash
    make scrape INPUT=data/profiles.csv
@@ -243,3 +247,20 @@ The parsed results CSV contains the following columns:
 - Detailed_Profile: Comprehensive background (200-300 words)
 - Media_Links: URLs to media appearances (pipe-separated)
 - Professional_Links: URLs to professional pages (pipe-separated)
+
+
+### TODO:
+
+
+
+
+1. before making the ddg search, exclude profiles that are not immediately relevant (ex: dairy farmers without any focus on growing crops)
+2. ddg search parsing: exclude the links connected to the main even we discovered them through (ex: speaker page on the event website)
+2. linkedin links fixes:
+   - make sure they either start with https://www.linkedin. or https://uk.linkedin.com
+   - make sure they are the links of actual people, not businesses/organizations
+   - extract the slug at the same stage as we extract the URL.
+3. linkedin scraping: keep track of the scraped profiles as we scrape them
+4. linkedin content:
+   - extract the number of connections, followers, top voice
+   - extract the posts

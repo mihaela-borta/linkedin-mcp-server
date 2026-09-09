@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 import logging
 import re
+import argparse
 
 # Configure logging
 logging.basicConfig(
@@ -277,13 +278,19 @@ class GroundswellScraper:
 
             i += 1
 
-        # Join bio lines - don't truncate
         bio = " ".join(bio_lines)
+        bio = bio.split(" **")[
+            0
+        ]  # remove the lines of other speakrs possibly mentioned
 
         return SpeakerProfile(name=name, url=url, bio=bio.strip(), sessions=sessions)
 
     def process_speakers(
-        self, csv_path: str, start_index: int = 0, batch_size: int = 50
+        self,
+        csv_path: str,
+        start_index: int = 0,
+        batch_size: int = 50,
+        output_path: str = "groundswellag_speakers.csv",
     ):
         import pandas as pd
 
@@ -297,16 +304,14 @@ class GroundswellScraper:
             end_index = min(start_index + batch_size, total_speakers)
             batch = df.iloc[start_index:end_index]
             # Load existing names from the output file
-            existing_names = get_existing_names("data/speakers.csv")
+            existing_names = get_existing_names(output_path)
             results = []
             for _, row in batch.iterrows():
                 name = row["name"]
                 url = row["speaker_page"] if "speaker_page" in row else row["url"]
                 logger.info(f"Processing {name}")
                 if name in existing_names:
-                    logger.info(
-                        f"Skipping {name}: already present in data/speakers.csv"
-                    )
+                    logger.info(f"Skipping {name}: already present in {output_path}")
                     continue
                 # Scrape the page
                 raw_data = self.scrape_speaker_page(url)
@@ -332,17 +337,58 @@ class GroundswellScraper:
                 # Rate limiting
                 time.sleep(self.request_delay)
             # Save after each batch
-            save_speakers_to_csv(
-                results, output_path="data/speakers.csv", max_sessions=3
-            )
-            logger.info(f"Saved batch results {batch} to: data/speakers.csv")
+            save_speakers_to_csv(results, output_path=output_path, max_sessions=3)
+            logger.info(f"Saved batch results {batch} to: {output_path}")
             start_index = end_index
         logger.info("All batches complete.")
 
 
 def main():
-    """Process Groundswell speakers"""
+    """Process Groundswell speakers
+
+    The final CSV is saved to the path specified by --output (default: groundswellag_speakers.csv in the current directory).
+    """
     import os
+
+    parser = argparse.ArgumentParser(
+        description="Scrape speaker details from speaker pages."
+    )
+    parser.add_argument(
+        "--input",
+        type=str,
+        default="data/groundswellag_speaker_webpages.csv",
+        help="Input CSV file with speaker URLs (default: data/groundswellag_speaker_webpages.csv)",
+    )
+    parser.add_argument(
+        "--output",
+        type=str,
+        default="groundswellag_speakers.csv",
+        help="Output CSV file for speaker details (default: groundswellag_speakers.csv)",
+    )
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=10,
+        help="Batch size for scraping (default: 10)",
+    )
+    parser.add_argument(
+        "--start-index",
+        type=int,
+        default=0,
+        help="Start index for processing (default: 0)",
+    )
+    args = parser.parse_args()
+
+    # Ensure output is in 'data' directory unless an absolute or custom path is provided
+    output_path = args.output
+    if not (
+        output_path.startswith("/")
+        or output_path.startswith("./")
+        or "/" in output_path
+    ):
+        output_path = f"data/{output_path}"
+    # Create the output directory if it doesn't exist
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
     # Configuration - get API key from environment variable
     FIRECRAWL_API_KEY = os.getenv("FIRECRAWL_API_KEY")
@@ -351,18 +397,16 @@ def main():
         logger.info("Set it with: export FIRECRAWL_API_KEY='your_actual_api_key'")
         return
 
-    CSV_PATH = "data/groundswellag-2025-speakers.csv"
-
     # Initialize scraper
     scraper = GroundswellScraper(FIRECRAWL_API_KEY, output_dir="data/scraped")
 
-    # Process in batches
-    batch_size = 10  # Adjust based on API rate limits
-    start_index = 0  # Start from beginning, or resume from specific index
-
     try:
-        scraper.process_speakers(CSV_PATH, start_index, batch_size)
-
+        scraper.process_speakers(
+            args.input,
+            start_index=args.start_index,
+            batch_size=args.batch_size,
+            output_path=output_path,
+        )
     except Exception as e:
         logger.error(f"Error in processing: {e}")
         raise
@@ -490,7 +534,9 @@ def get_existing_names(output_path):
     return set()
 
 
-def save_speakers_to_csv(profiles, output_path="data/speakers.csv", max_sessions=3):
+def save_speakers_to_csv(
+    profiles, output_path="groundswellag_speakers.csv", max_sessions=3
+):
     import pandas as pd
     from pathlib import Path
 

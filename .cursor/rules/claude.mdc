@@ -1,0 +1,102 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+---
+description: Fast-paced Python MVP for prospect intelligence with MCP integrations
+globs:
+  - "**/*.py"
+  - "**/Makefile"
+alwaysApply: false
+---
+
+# Context
+Building a prospect intelligence gathering tool using MCP (Model Context Protocol) for LinkedIn and web search integrations. Priority: ship working MVP for daily use, then iterate.
+
+# Development Philosophy
+- Ship fast, fix later - working code over perfect code
+- Use existing code patterns - don't refactor what works
+- Minimal dependencies - stdlib first, then essential packages only
+- Test only critical paths - external API integrations and data pipelines
+
+# Mandatory Technical Choices
+
+## Package Management - uv ONLY
+```bash
+uv add <package>          # Install packages
+uv add --dev <package>    # Dev dependencies
+uv sync                   # Sync environment
+uv run python <script>    # Execute scripts
+uv run pytest            # Run tests
+# NEVER use pip, poetry, or conda
+```
+
+## Python Patterns
+- Python 3.11+ with type hints on all functions
+- Pydantic for data models (validation + serialization built-in)
+- python-dotenv for environment variables
+- Standard library logging (no custom frameworks)
+- Async only if MCP server requires it
+
+## MCP Integration Guidelines
+- Each MCP server gets its own client class
+- Handle rate limits with exponential backoff
+- Cache MCP responses where sensible
+- Always close MCP connections properly
+- Log all MCP interactions for debugging
+- Store MCP server credentials in .env only
+
+## Error Handling
+- Let it fail fast during development
+- Only wrap external calls (MCP, APIs) in try/except
+- Log with context, don't suppress silently
+- Raise custom exceptions sparingly
+
+# Code Style
+- Type hints mandatory: `def process(data: Dict[str, Any]) -> ProspectIntel:`
+- Docstrings for public APIs only
+- Minumum comments. Explain "why" not "what"
+- f-strings for formatting
+- Early returns over nested conditionals
+- List comprehensions only when readable
+
+# Code Style (auto-formatted)
+- Use Black formatter with default settings (88 char lines)
+- Use Ruff for linting (catches actual bugs, not just style)
+- Don't waste time on manual formatting
+- Consistency > perfection
+
+# MVP Shortcuts (Temporary)
+- JSON files for data storage (switch to DB later)
+- Print debugging allowed (convert to logging later)
+- Hardcoded configs acceptable (move to config file later)
+- Single-threaded execution (add async when needed)
+- Minimal test coverage (smoke tests for integrations only)
+
+# What NOT to Do
+- No premature optimization
+- No complex abstractions without 3+ use cases
+- No microservices or distributed systems
+- No custom frameworks or protocols
+- No perfect error handling on first pass
+- No comprehensive test suite before shipping
+
+# Daily Workflow
+- `make run` or `uv run python -m main` should just work
+- All secrets in .env (never commit)
+- One command to test: `make test-prospect NAME="John Doe"`
+- Quick iteration: edit, run, test, ship
+
+# When to Refactor
+- AFTER 10+ daily active users
+- AFTER the same bug appears 3 times
+- AFTER performance blocks usage
+- NEVER during MVP development
+
+# AI Assistant Notes
+When generating code:
+1. Prefer simple, obvious solutions
+2. Don't add dependencies without explicit need
+3. Generate minimal code that solves the immediate problem
+4. Include error handling only for external services

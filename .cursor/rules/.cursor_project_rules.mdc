@@ -1,0 +1,42 @@
+# MVP Development Rules
+
+## Core Principles
+- Ship working code over perfect architecture
+- Direct solutions over abstraction layers
+- Clear error messages and logging
+- Fail fast, recover gracefully
+
+## Code Style
+- Functions do one thing well
+- Minimal dependencies, prefer stdlib
+- Type hints for public APIs only
+- Comments only when code isn't self-explanatory
+- No premature optimization
+
+## MVP Patterns
+- Single file for single purpose
+- CLI args for configuration over config files
+- CSV/JSON for data exchange
+- Print progress for long operations
+- Exit codes: 0 success, 1 error
+
+## Structure
+```
+src/           # Reusable components
+scripts/       # One-off automation
+data/          # Input/output files
+```
+
+## Error Handling
+```python
+try:
+    result = risky_operation()
+except SpecificError as e:
+    print(f"Failed: {e}")
+    sys.exit(1)
+```
+
+## Dependencies
+- Add only when stdlib insufficient
+- Prefer mature, stable packages
+- Document why each dependency is needed

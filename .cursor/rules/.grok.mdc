@@ -1,0 +1,58 @@
+---
+description: Guidelines for the Python MVP project integrating MCP (e.g., LinkedIn) and web search tools for prospect intelligence and engagement.
+globs: 
+alwaysApply: true
+---
+
+# Project Overview
+This is an MVP Python project for gathering background intelligence on prospects (e.g., from events) using MCP integrations (LinkedIn API, etc.) and web search tools. It fetches data, processes it, and enables engagement (e.g., personalized messaging).
+
+Core goals:
+- Balance speed (ship MVP fast) with reusability (modular for future scaling).
+- Clean, self-explanatory code: Readable without excessive comments.
+- Tech stack: Python 3.10+, requests or httpx for APIs, pydantic for data models, logging instead of print.
+
+# General Coding Guidelines
+- Follow PEP 8 strictly: 79-char line limit, consistent spacing.
+- Use type hints everywhere (from typing import ...).
+- Prefer f-strings for formatting.
+- No global variables; use classes or functions with clear inputs/outputs.
+- Error handling: Use try/except for API calls, raise custom exceptions for business logic.
+- Testing: Include simple unit tests with pytest for core functions (e.g., API fetchers). Aim for 50% coverage in MVP.
+- Dependencies: Minimize. Use stdlib first, then pip-installable like requests, pydantic. List in requirements.txt.
+
+# Architecture and Structure
+- Modular design: Separate concerns into folders like src/integrations/, src/data/, src/engagement/, src/utils/, tests/.
+- Entry point: main.py or app.py with CLI or simple script runner.
+- For MVP, keep it script-based; avoid full frameworks unless needed.
+- Reusability: Write functions like fetch_linkedin_profile(user_id: str) -> Dict that can be reused.
+- Avoid over-engineering: No async unless perf-critical; sync code for simplicity.
+
+# Specific Rules for Key Features
+## Integrations
+- Use environment variables for API keys (via dotenv).
+- Wrap API calls in classes like LinkedinIntegrator.
+- Handle rate limits with simple retries.
+
+## Data Gathering and Processing
+- Use pydantic BaseModels for data structures.
+- Name functions self-explanatorily, e.g., gather_intel_from_sources(prospect_name: str) -> ProspectIntel.
+
+## Engagement
+- Functions like generate_engagement_message(intel: ProspectIntel) -> str.
+- For MVP, print or log; extend later.
+
+# Code Generation Preferences
+- Prioritize simplicity: Use for-loops over comprehensions if readability improves.
+- Docstrings: Google-style for public functions.
+- Comments: Only for 'why', not 'what'.
+
+# Anti-Patterns
+- No magic numbers; use constants.
+- No hardcoded API strings; use configs.
+- Don't optimize prematurely.
+
+# Best Practices from Cursor Docs
+- Keep this file under 500 lines.
+- Provide concrete examples where possible.
+- Write clearly, like internal docs.
